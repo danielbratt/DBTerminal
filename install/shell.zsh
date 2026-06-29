@@ -54,6 +54,15 @@ function git_main_branch() {
   echo main
 }
 
+# --- Navigation ---
+alias ...='cd ../..'
+alias ....='cd ../../..'
+alias .....='cd ../../../..'
+
+# --- DBTerminal shortcuts ---
+alias note='db note'
+alias todo='db todo'
+
 # --- Git aliases (lean core; OMZ naming kept for muscle memory) ---
 alias g='git'
 
