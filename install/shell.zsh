@@ -113,6 +113,7 @@ alias grs='git restore'
 alias grst='git restore --staged'
 
 # stash
+alias gs='git stash'
 alias gsta='git stash apply'
 alias gstp='git stash pop'
 alias gstl='git stash list'
