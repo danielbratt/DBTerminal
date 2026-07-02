@@ -15,12 +15,14 @@ Usage:
   db todo remove <number>  Remove a specific todo
   db todo clear            Clear all todos
   db todo clear-done       Remove only completed todos
+  db todo edit <number> <new text>  Edit a todo's text
   db todo help             Show this help message
 
 Examples:
   db todo add Buy groceries
   db todo done 1
   db todo remove 2
+  db todo edit 1 Buy organic groceries
 """
 
 
@@ -81,6 +83,16 @@ def remove(index):
         save(todos)
 
 
+def edit(index, text):
+    todos = load()
+    todo = at(todos, index)
+    if todo:
+        old = todo["text"]
+        todo["text"] = text
+        save(todos)
+        print(f"✓ Updated: {old} → {text}")
+
+
 def clear_all():
     if os.path.exists(TODO_FILE):
         os.remove(TODO_FILE)
@@ -123,6 +135,14 @@ def main():
         n = number(args, "Usage: db todo remove <number>")
         if n is not None:
             remove(n)
+    elif cmd == "edit":
+        n = number(args, "Usage: db todo edit <number> <new text>")
+        if n is not None:
+            new_text = " ".join(args[1:])
+            if new_text:
+                edit(n, new_text)
+            else:
+                print("Usage: db todo edit <number> <new text>")
     elif cmd == "clear":
         clear_all()
     elif cmd == "clear-done":
