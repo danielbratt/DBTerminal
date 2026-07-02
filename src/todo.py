@@ -47,6 +47,7 @@ def list_todos():
         status = "✓" if todo["done"] else " "
         print(f"{i}. [{status}] {todo['text']}")
     print("-" * 50)
+    print()
 
 
 def add(text):
