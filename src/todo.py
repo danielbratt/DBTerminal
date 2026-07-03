@@ -13,8 +13,11 @@ Usage:
   db todo list             Show all todos
   db todo done <number>    Mark a todo as done
   db todo remove <number>  Remove a specific todo
-  db todo clear            Clear all todos
-  db todo clear-done       Remove only completed todos
+  db todo move <number> <position>  Move a todo to a new position
+  db todo priority <number>  Pin a todo to the top (only one at a time)
+  db todo priority clear     Remove priority from current pinned todo
+  db todo clear            Remove only completed todos
+  db todo clear all        Clear all todos
   db todo edit <number> <new text>  Edit a todo's text
   db todo help             Show this help message
 
@@ -47,7 +50,11 @@ def list_todos():
     print("-" * 50)
     for i, todo in enumerate(todos, 1):
         status = "✓" if todo["done"] else " "
-        print(f"{i}. [{status}] {todo['text']}")
+        if todo.get("priority"):
+            print(f"*  [{status}] {todo['text']}")
+            print("-" * 50)
+        else:
+            print(f"{i}. [{status}] {todo['text']}")
     print("-" * 50)
     print()
 
@@ -81,6 +88,41 @@ def remove(index):
     if at(todos, index):
         print(f"✓ Removed: {todos.pop(index - 1)['text']}")
         save(todos)
+
+
+def move(from_index, to_index):
+    todos = load()
+    if not at(todos, from_index):
+        return
+    if not (1 <= to_index <= len(todos)):
+        print(f"Invalid position: {to_index}")
+        return
+    todo = todos.pop(from_index - 1)
+    todos.insert(to_index - 1, todo)
+    save(todos)
+    print(f"✓ Moved '{todo['text']}' to position {to_index}")
+
+
+def set_priority(index):
+    todos = load()
+    todo = at(todos, index)
+    if not todo:
+        return
+    for t in todos:
+        t["priority"] = False
+    todo["priority"] = True
+    todos.insert(0, todos.pop(index - 1))
+    save(todos)
+    print(f"✓ Prioritised: {todo['text']}")
+
+
+def clear_priority():
+    todos = load()
+    cleared = any(t.get("priority") for t in todos)
+    for t in todos:
+        t["priority"] = False
+    save(todos)
+    print("✓ Priority cleared." if cleared else "No priority set.")
 
 
 def edit(index, text):
@@ -135,6 +177,19 @@ def main():
         n = number(args, "Usage: db todo remove <number>")
         if n is not None:
             remove(n)
+    elif cmd == "move":
+        n = number(args, "Usage: db todo move <number> <position>")
+        if n is not None:
+            m = number(args[1:], "Usage: db todo move <number> <position>")
+            if m is not None:
+                move(n, m)
+    elif cmd == "priority":
+        if args and args[0].lower() == "clear":
+            clear_priority()
+        else:
+            n = number(args, "Usage: db todo priority <number>")
+            if n is not None:
+                set_priority(n)
     elif cmd == "edit":
         n = number(args, "Usage: db todo edit <number> <new text>")
         if n is not None:
@@ -144,9 +199,10 @@ def main():
             else:
                 print("Usage: db todo edit <number> <new text>")
     elif cmd == "clear":
-        clear_all()
-    elif cmd == "clear-done":
-        clear_done()
+        if args and args[0].lower() == "all":
+            clear_all()
+        else:
+            clear_done()
     elif cmd == "help":
         print(HELP)
     else:
