@@ -12,6 +12,7 @@ Usage:
   db todo add <task>       Add a new todo
   db todo list             Show all todos
   db todo done <number>    Mark a todo as done
+  db todo undone <number>  Mark a todo as not done
   db todo remove <number>  Remove a specific todo
   db todo move <number> <position>  Move a todo to a new position
   db todo priority <number>  Pin a todo to the top (only one at a time)
@@ -24,6 +25,7 @@ Usage:
 Examples:
   db todo add Buy groceries
   db todo done 1
+  db todo undone 1
   db todo remove 2
   db todo edit 1 Buy organic groceries
 """
@@ -81,6 +83,15 @@ def done(index):
         todo["done"] = True
         save(todos)
         print(f"✓ Marked as done: {todo['text']}")
+
+
+def undone(index):
+    todos = load()
+    todo = at(todos, index)
+    if todo:
+        todo["done"] = False
+        save(todos)
+        print(f"✓ Marked as not done: {todo['text']}")
 
 
 def remove(index):
@@ -173,6 +184,10 @@ def main():
         n = number(args, "Usage: db todo done <number>")
         if n is not None:
             done(n)
+    elif cmd == "undone":
+        n = number(args, "Usage: db todo undone <number>")
+        if n is not None:
+            undone(n)
     elif cmd == "remove":
         n = number(args, "Usage: db todo remove <number>")
         if n is not None:
