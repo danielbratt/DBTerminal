@@ -21,6 +21,8 @@ Usage:
   db todo priority clear          Remove priority from current pinned todo
   db todo park <target>           Move a task into the Park section
   db todo unpark <letter>         Move a Park task back into TODO
+  db todo hide <tasks|park>       Collapse a section in the list
+  db todo show <tasks|park>       Reveal a hidden section
   db todo clear                   Remove only completed todos
   db todo clear all               Clear all todos
   db todo edit <target> <new text>  Edit a todo's text
@@ -44,23 +46,66 @@ Examples:
   db todo park 3          Move TODO task 3 into Park
   db todo park *          Move the Priority task into Park
   db todo unpark a        Move Park task a back into TODO
+  db todo hide park       Collapse the Park section
+  db todo show park       Bring the Park section back
 """
 
 
+def read_file():
+    """Read the todo file as {"todos": [...], "hidden": [...]}, accepting the
+    older format where the file was a bare list of todos."""
+    if not os.path.exists(TODO_FILE):
+        return {"todos": [], "hidden": []}
+    with open(TODO_FILE) as f:
+        data = json.load(f)
+    if isinstance(data, list):
+        return {"todos": data, "hidden": []}
+    return {"todos": data.get("todos", []), "hidden": data.get("hidden", [])}
+
+
 def load():
-    if os.path.exists(TODO_FILE):
-        with open(TODO_FILE) as f:
-            return json.load(f)
-    return []
+    return read_file()["todos"]
 
 
 def save(todos):
+    data = read_file()
+    data["todos"] = todos
     with open(TODO_FILE, "w") as f:
-        json.dump(todos, f, indent=2)
+        json.dump(data, f, indent=2)
+
+
+def load_hidden():
+    return read_file()["hidden"]
+
+
+def save_hidden(hidden):
+    data = read_file()
+    data["hidden"] = hidden
+    with open(TODO_FILE, "w") as f:
+        json.dump(data, f, indent=2)
+
+
+def italic(text):
+    """Wrap text in ANSI italics, or leave it bare when piped to a file."""
+    if sys.stdout.isatty():
+        return f"\033[3m{text}\033[0m"
+    return text
+
+
+def print_section(title, lines, hidden):
+    print(title)
+    print("-" * 50)
+    if hidden:
+        print(f"  {italic('This section is hidden')}")
+    else:
+        for line in lines:
+            print(line)
+    print("-" * 50)
 
 
 def list_todos():
     todos = load()
+    hidden = load_hidden()
     if not todos:
         print("No todos yet! Add one with: db todo add <your task>")
         return
@@ -69,30 +114,33 @@ def list_todos():
     normal = [t for t in todos if not t.get("priority") and not t.get("park")]
     print()
     if priority:
-        print("Priority")
-        print("-" * 50)
-        for todo in priority:
-            status = "✓" if todo["done"] else " "
-            print(f"*  [{status}] {todo['text']}")
-        print("-" * 50)
-    if normal:
+        print_section(
+            "Priority",
+            [f"*  [{'✓' if t['done'] else ' '}] {t['text']}" for t in priority],
+            False,
+        )
+    if normal or "tasks" in hidden:
         if priority:
             print()
-        print("Tasks")
-        print("-" * 50)
-        for i, todo in enumerate(normal, 1):
-            status = "✓" if todo["done"] else " "
-            print(f"{i}. [{status}] {todo['text']}")
-        print("-" * 50)
-    if park:
-        if priority or normal:
+        print_section(
+            "Tasks",
+            [
+                f"{i}. [{'✓' if t['done'] else ' '}] {t['text']}"
+                for i, t in enumerate(normal, 1)
+            ],
+            "tasks" in hidden,
+        )
+    if park or "park" in hidden:
+        if priority or normal or "tasks" in hidden:
             print()
-        print("Parked")
-        print("-" * 50)
-        for i, todo in enumerate(park, 1):
-            status = "✓" if todo["done"] else " "
-            print(f"{park_label(i)}. [{status}] {todo['text']}")
-        print("-" * 50)
+        print_section(
+            "Parked",
+            [
+                f"{park_label(i)}. [{'✓' if t['done'] else ' '}] {t['text']}"
+                for i, t in enumerate(park, 1)
+            ],
+            "park" in hidden,
+        )
     print()
 
 
@@ -319,6 +367,51 @@ def edit(target, text):
     print(f"✓ Updated: {old} → {text}")
 
 
+SECTION_NAMES = {
+    "tasks": "tasks",
+    "task": "tasks",
+    "todo": "tasks",
+    "todos": "tasks",
+    "list": "tasks",
+    "park": "park",
+    "parked": "park",
+}
+
+
+def section(name):
+    """Resolve a section argument to its key, or None if it isn't one."""
+    key = SECTION_NAMES.get(name.lower())
+    if key is None:
+        print(f"Unknown section: {name}. Use 'tasks' or 'park'.")
+    return key
+
+
+def hide(name):
+    key = section(name)
+    if key is None:
+        return
+    hidden = load_hidden()
+    if key in hidden:
+        print(f"The {key} section is already hidden.")
+        return
+    hidden.append(key)
+    save_hidden(hidden)
+    print(f"✓ Hid the {key} section.")
+
+
+def show(name):
+    key = section(name)
+    if key is None:
+        return
+    hidden = load_hidden()
+    if key not in hidden:
+        print(f"The {key} section is not hidden.")
+        return
+    hidden.remove(key)
+    save_hidden(hidden)
+    print(f"✓ Showing the {key} section again.")
+
+
 def clear_all():
     if os.path.exists(TODO_FILE):
         os.remove(TODO_FILE)
@@ -436,6 +529,10 @@ def main():
                 edit(t, new_text)
             else:
                 print("Usage: db todo edit <number|*|letter> <new text>")
+    elif cmd == "hide":
+        hide(args[0]) if args else print("Usage: db todo hide <tasks|park>")
+    elif cmd == "show":
+        show(args[0]) if args else print("Usage: db todo show <tasks|park>")
     elif cmd == "clear":
         if args and args[0].lower() == "all":
             clear_all()
