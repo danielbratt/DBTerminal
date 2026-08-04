@@ -152,14 +152,16 @@ def add(text, priority=False, park=False):
             t["priority"] = False
         todo["priority"] = True
         todos.insert(0, todo)
-        print(f"✓ Added priority task: {text}")
+        print(f"✓ Added priority task: {text} (0)")
     elif park:
         todo["park"] = True
         todos.append(todo)
-        print(f"✓ Added to Park: {text}")
+        count = sum(1 for t in todos if t.get("park"))
+        print(f"✓ Added to Park: {text} ({park_label(count)})")
     else:
         todos.append(todo)
-        print(f"✓ Added: {text}")
+        count = sum(1 for t in todos if not t.get("priority") and not t.get("park"))
+        print(f"✓ Added: {text} ({count})")
     save(todos)
 
 
