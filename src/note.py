@@ -11,6 +11,7 @@ DBTerminal Notes - Filesystem-based note manager
 Notes are stored as markdown files in ~/.dbterminal/notes/
 
 Usage:
+  db note browse              Browse notes in a full-screen picker
   db note add <path> [text]   Create a note (opens editor if no text given)
   db note list [dir]          List notes and subdirectories
   db note show <path>         Print a note's content
@@ -20,7 +21,11 @@ Usage:
   db note rmdir <dir>         Remove an empty directory
   db note help                Show this help message
 
+In the browser: ↑/↓ move, ↵ open, ← up a level, n new note, d new
+directory, r rename, x delete, q quit.
+
 Examples:
+  db note browse
   db note add work/standup "Team sync at 9am"
   db note add ideas/project-x
   db note list work
@@ -129,7 +134,10 @@ def main():
     cmd, *args = sys.argv[1:] or [""]
     cmd = cmd.lower()
 
-    if cmd in ("", "list"):
+    if cmd in ("", "browse"):
+        from browse import browse
+        browse(NOTES_DIR, editor)
+    elif cmd == "list":
         list_notes(args[0] if args else ".")
     elif cmd == "add" and args:
         add_note(args[0], " ".join(args[1:]) or None)

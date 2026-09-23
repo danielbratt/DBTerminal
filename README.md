@@ -37,10 +37,15 @@ db todo list              db todo remove <number>   db todo clear
 ### `db note` — markdown notes (stored in `~/.dbterminal/notes/`)
 
 ```bash
-db note add <path> [text]   db note show <path>    db note mkdir <dir>
-db note list [dir]          db note edit <path>    db note rmdir <dir>
-db note remove <path>
+db note browse              db note show <path>    db note mkdir <dir>
+db note add <path> [text]   db note edit <path>    db note rmdir <dir>
+db note list [dir]          db note remove <path>
 ```
+
+`db note` on its own (or `db note browse`) opens a full-screen browser over the
+notes folder — move with `↑`/`↓`, `↵` to open a folder or edit a note in
+`$EDITOR`, `←` to go up, `n` new note, `d` new directory, `r` rename, `x`
+delete, `q` quit. Uses `curses` from the standard library.
 
 ## Shell features
 
@@ -50,7 +55,7 @@ navigation, and git aliases (`gs`, `ga`, `gco`, `gp`, …).
 ## Layout
 
 ```
-src/        db.py (dispatcher), todo.py, note.py
+src/        db.py (dispatcher), todo.py, note.py, browse.py
 install/    install.sh, shell.zsh
 ```
 

@@ -182,6 +182,8 @@ class Browser:
     def enter(self, path):
         self.cwd = path
         self.index = self.offset = 0
+        self.refresh_items()
+        self.index = min(1, len(self.items) - 1)  # skip past '..'
 
     def leave(self):
         if self.cwd == self.root:
