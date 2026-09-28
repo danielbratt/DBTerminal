@@ -13,11 +13,11 @@ Usage:
   db todo add <task>              Add a new todo (goes in TODO)
   db todo add -p <task>           Add a task and pin it into the Priority stack
   db todo add -n <task>           Add a task to the Park section
-  db todo add sub <number> <task> Add a sub-item under TODO task <number>
+  db todo add sub <number|P1|P2|P3> <task>  Add a sub-item under a task
   db todo list                    Show all todos
   db todo done <target>           Mark a todo as done
   db todo undone <target>         Mark a todo as not done
-  db todo remove <target>         Remove a specific todo
+  db todo remove <target> ...     Remove one or more todos
   db todo move <number> <position>  Move a TODO task to a new position
   db todo swap <target1> <target2>  Swap two tasks in the same section
   db todo priority <target>       Push a task onto the Priority stack (max 3)
@@ -35,6 +35,7 @@ Usage:
 <target> addresses a task:
   <number>       the task's position in the TODO section
   <number><letter>  a sub-item under a TODO task, e.g. 1a, 1b, 1c
+  P1a, P2b       a sub-item under a Priority task
   P1, P2, P3     a task's slot in the Priority stack (max 3 at a time)
   <letter>       the task's position in the Park section (a, b, c, ...)
 
@@ -49,6 +50,7 @@ Examples:
   db todo done a
   db todo remove 2
   db todo remove 1a
+  db todo remove 4 5 6 7   Remove several at once
   db todo edit 1 Buy organic groceries
   db todo edit 1a Write more tests
   db todo swap 1 2         Swap TODO tasks 1 and 2
@@ -62,7 +64,7 @@ Examples:
   db todo show park       Bring the Park section back
 """
 
-SUB_TARGET_RE = re.compile(r"^(\d+)([a-z])$")
+SUB_TARGET_RE = re.compile(r"^(\d+|P[123])([a-z])$", re.IGNORECASE)
 
 
 def read_file():
@@ -134,6 +136,19 @@ def normal_lines(normal):
     return lines
 
 
+def priority_lines(priority):
+    """Render Priority section lines, with each task's sub-items indented
+    underneath it (P1, P1a, P1b, ...)."""
+    lines = []
+    for t in priority:
+        lines.append(f"P{t['priority']}  [{'✓' if t['done'] else ' '}] {t['text']}")
+        for j, sub in enumerate(t.get("sub", []), 1):
+            lines.append(
+                f"    P{t['priority']}{park_label(j)}. [{'✓' if sub['done'] else ' '}] {sub['text']}"
+            )
+    return lines
+
+
 def list_todos():
     todos = load()
     hidden = load_hidden()
@@ -147,14 +162,7 @@ def list_todos():
     normal = [t for t in todos if not t.get("priority") and not t.get("park")]
     print()
     if priority:
-        print_section(
-            "Priority",
-            [
-                f"P{t['priority']}  [{'✓' if t['done'] else ' '}] {t['text']}"
-                for t in priority
-            ],
-            False,
-        )
+        print_section("Priority", priority_lines(priority), False)
     if normal or "tasks" in hidden:
         if priority:
             print()
@@ -196,11 +204,25 @@ def add(text, priority=False, park=False):
     save(todos)
 
 
-def add_sub(parent_number, text):
-    todos = load()
+def parent_index(todos, parent_number):
+    """Raw 1-based index of a sub-item's parent: a TODO number, or a
+    Priority slot written like "P1". Prints an error and returns None if
+    it doesn't match anything."""
+    if isinstance(parent_number, str):
+        idx = priority_rank_index(todos, int(parent_number[1]))
+        if idx is None:
+            print(f"No priority task in slot {parent_number}.")
+        return idx
     idx = normal_index(todos, parent_number)
     if idx is None:
         print(f"Invalid todo number: {parent_number}")
+    return idx
+
+
+def add_sub(parent_number, text):
+    todos = load()
+    idx = parent_index(todos, parent_number)
+    if idx is None:
         return
     parent = todos[idx - 1]
     subs = parent.setdefault("sub", [])
@@ -212,9 +234,8 @@ def add_sub(parent_number, text):
 def resolve_sub(todos, parent_number, sub_number):
     """Return (parent_raw_index, sub_raw_index), or (None, None) after
     printing an error."""
-    parent_idx = normal_index(todos, parent_number)
+    parent_idx = parent_index(todos, parent_number)
     if parent_idx is None:
-        print(f"Invalid todo number: {parent_number}")
         return None, None
     subs = todos[parent_idx - 1].get("sub", [])
     if not (1 <= sub_number <= len(subs)):
@@ -427,6 +448,37 @@ def remove(target):
     compact_priority_ranks(todos)
     save(todos)
     print(f"✓ Removed: {removed['text']}")
+
+
+def remove_many(targets):
+    """Remove several targets at once. Every target is resolved against the
+    list as it is now, so earlier removals don't shift later numbers."""
+    todos = load()
+    picked = []  # (task dict, sub dict or None, parent dict or None)
+    for target in targets:
+        kind, value = target
+        if kind == "sub":
+            parent_idx, sub_idx = resolve_sub(todos, *value)
+            if parent_idx is None:
+                continue
+            parent = todos[parent_idx - 1]
+            entry = (parent["sub"][sub_idx - 1], parent)
+        else:
+            idx = resolve(todos, target)
+            if idx is None:
+                continue
+            entry = (todos[idx - 1], None)
+        if not any(entry[0] is e[0] for e in picked):
+            picked.append(entry)
+    for item, parent in picked:
+        if parent is None:
+            todos[:] = [t for t in todos if t is not item]
+        else:
+            parent["sub"] = [x for x in parent["sub"] if x is not item]
+        print(f"✓ Removed: {item['text']}")
+    if picked:
+        compact_priority_ranks(todos)
+        save(todos)
 
 
 def move(from_display, to_display):
@@ -676,7 +728,10 @@ def parse_target(args, usage):
         return None, args
     sub_match = SUB_TARGET_RE.match(args[0])
     if sub_match:
-        parent_number = int(sub_match.group(1))
+        parent_number = sub_match.group(1)
+        parent_number = (
+            parent_number.upper() if parent_number[0] in "Pp" else int(parent_number)
+        )
         sub_number = park_letter_to_number(sub_match.group(2))
         return ("sub", (parent_number, sub_number)), args[1:]
     if is_park_letter(args[0]):
@@ -704,11 +759,12 @@ def main():
             text = " ".join(args[1:])
             add(text, park=True) if text else print("Usage: db todo add -n <task>")
         elif args and args[0].lower() == "sub":
-            usage = "Usage: db todo add sub <number> <task>"
-            if len(args) < 3 or not args[1].isdigit():
+            usage = "Usage: db todo add sub <number|P1|P2|P3> <task>"
+            parent = args[1] if len(args) > 1 else ""
+            if len(args) < 3 or not (parent.isdigit() or parent.upper() in ("P1", "P2", "P3")):
                 print(usage)
             else:
-                add_sub(int(args[1]), " ".join(args[2:]))
+                add_sub(int(parent) if parent.isdigit() else parent.upper(), " ".join(args[2:]))
         elif args:
             add(" ".join(args))
         else:
@@ -722,9 +778,20 @@ def main():
         if t is not None:
             undone(t)
     elif cmd == "remove":
-        t, _ = parse_target(args, "Usage: db todo remove <number|1a|P1|P2|P3|letter>")
-        if t is not None:
-            remove(t)
+        usage = "Usage: db todo remove <target> [target ...]"
+        targets = []
+        rest = args
+        while rest:
+            t, rest = parse_target(rest, usage)
+            if t is None:
+                targets = []
+                break
+            targets.append(t)
+        if targets or not args:
+            if targets:
+                remove_many(targets)
+            else:
+                print(usage)
     elif cmd == "move":
         n = number(args, "Usage: db todo move <number> <position>")
         if n is not None:
