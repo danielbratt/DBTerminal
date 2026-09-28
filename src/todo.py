@@ -13,7 +13,7 @@ Usage:
   db todo add <task>              Add a new todo (goes in TODO)
   db todo add -p <task>           Add a task and pin it into the Priority stack
   db todo add -n <task>           Add a task to the Park section
-  db todo add <number> <task>     Add a sub-item under TODO task <number>
+  db todo add sub <number> <task> Add a sub-item under TODO task <number>
   db todo list                    Show all todos
   db todo done <target>           Mark a todo as done
   db todo undone <target>         Mark a todo as not done
@@ -42,7 +42,7 @@ Examples:
   db todo add Buy groceries
   db todo add -p Fix production bug
   db todo add -n Read that article someday
-  db todo add 1 Write tests           Add sub-item 1a under task 1
+  db todo add sub 1 Write tests       Add sub-item 1a under task 1
   db todo done 1
   db todo done 1a
   db todo done P1
@@ -703,12 +703,12 @@ def main():
         elif args and args[0] in ("-n", "--park"):
             text = " ".join(args[1:])
             add(text, park=True) if text else print("Usage: db todo add -n <task>")
-        elif args and args[0].isdigit():
-            parent_number = int(args[0])
-            text = " ".join(args[1:])
-            add_sub(parent_number, text) if text else print(
-                "Usage: db todo add <number> <task>"
-            )
+        elif args and args[0].lower() == "sub":
+            usage = "Usage: db todo add sub <number> <task>"
+            if len(args) < 3 or not args[1].isdigit():
+                print(usage)
+            else:
+                add_sub(int(args[1]), " ".join(args[2:]))
         elif args:
             add(" ".join(args))
         else:
